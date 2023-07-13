@@ -1,32 +1,31 @@
 #include <Windows.h>
-#include <iostream>
-#include <string>
-#include <sstream>
 #include <TlHelp32.h>
-#include <memory>
+
 #include <filesystem>
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
 
 namespace fs = std::filesystem;
 
-int main(int argc, char** argv) {
-    std::string args;
+int main(int argc, char **argv) {
+    std::string targetPath;
     {
+        fs::path _targetPath;
         std::stringstream ss;
-        for (int i=1; i<argc; ++i) {
+        for (int i = 1; i < argc; ++i) {
             ss << argv[i] << " ";
         }
-        args = ss.str();
-    }
-    
-    fs::path targetPath = args;
-    if (!fs::is_directory(targetPath)) {
-        std::cerr << args << " :is not a valid dir" << std::endl;
-        std::exit(-1);
+        _targetPath = ss.str();
+        if (!fs::is_directory(_targetPath)) {
+            std::cerr << _targetPath << ":is not a valid dir" << std::endl;
+            std::exit(-1);
+        }
+        targetPath = fs::absolute(_targetPath).string();
     }
 
-    std::string fullPath = fs::absolute(targetPath).string();
-    
-   
+
     HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnap == INVALID_HANDLE_VALUE) {
         std::cerr << "failed to create snapshot" << std::endl;
@@ -37,8 +36,8 @@ int main(int argc, char** argv) {
     memset(&pe, 0, sizeof(PROCESSENTRY32));
     pe.dwSize = sizeof(PROCESSENTRY32);
 
-    const DWORD currentPid = GetCurrentProcessId();
     DWORD parentPid = -1;
+    DWORD currentPid = GetCurrentProcessId();
 
     while (Process32Next(hSnap, &pe)) {
         if (pe.th32ProcessID == currentPid) {
@@ -62,33 +61,38 @@ int main(int argc, char** argv) {
         std::exit(-1);
     }
 
-    void* remoteAddr = VirtualAllocEx(hParent, nullptr, fullPath.size(), MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE);
+    void *remoteAddr = VirtualAllocEx(hParent, nullptr, targetPath.size(), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 
     size_t written = -1;
-    WriteProcessMemory(hParent, remoteAddr, fullPath.c_str(), fullPath.size(), &written);
-    if (written != fullPath.size()) {
-        std::cerr << "warn: " << written << " bytes written of " << fullPath.size() << " bytes" << std::endl;
+    WriteProcessMemory(hParent, remoteAddr, targetPath.c_str(), targetPath.size(),
+                                         &written);
+    if (written != targetPath.size()) {
+        std::cerr << "warn: " << written << " bytes written of " << targetPath.size()
+                            << " bytes" << std::endl;
     }
 
     DWORD threadId;
-    HANDLE hThread = CreateRemoteThread(hParent, NULL, 0, (LPTHREAD_START_ROUTINE)SetCurrentDirectoryA, remoteAddr, 0, &threadId);
+    HANDLE hThread = CreateRemoteThread(
+            hParent, NULL, 0, (LPTHREAD_START_ROUTINE)SetCurrentDirectoryA,
+            remoteAddr, 0, &threadId);
     // std::cout << "created thread: " << threadId << std::endl;
     WaitForSingleObject(hThread, INFINITE);
 
     DWORD exit = INT_MAX;
     GetExitCodeThread(hThread, &exit);
-    VirtualFreeEx(hThread, remoteAddr, fullPath.size(), MEM_RELEASE);
-    
+    VirtualFreeEx(hThread, remoteAddr, targetPath.size(), MEM_RELEASE);
+
     if (exit == 0)
         std::cout << "[SetDirectory]thread failed with: " << exit << std::endl;
 
     // Get last error
-    // hThread = CreateRemoteThread(hParent, NULL, 0, (LPTHREAD_START_ROUTINE)GetLastError, NULL, 0, &threadId);
+    // hThread = CreateRemoteThread(hParent, NULL, 0,
+    // (LPTHREAD_START_ROUTINE)GetLastError, NULL, 0, &threadId);
     // WaitForSingleObject(hThread, INFINITE);
     // GetExitCodeThread(hThread, &exit);
-    // 
+    //
     // if (exit != 0)
-    //     std::cout << "GetLastError(): " << exit << std::endl;
+    //         std::cout << "GetLastError(): " << exit << std::endl;
 
     CloseHandle(hParent);
 
