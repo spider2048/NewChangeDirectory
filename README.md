@@ -1,16 +1,28 @@
 # NewChangeDirectory
-Program to change directory (from within `cmd.exe`) without using `cd`. [Windows]
+Program to change directory of the parent process.
+
+Read about the project [here](https://sp1d3r.vercel.app/posts/cmd-cd/).
 
 # Usage
 ```bash
-ChangeDir.exe <valid_folder_path>
+ChangeDir.exe <Valid Folder Path>
 ```
 
-Unlike cmd.exe's cd, no `/d` flag is needed to change folders across drives.
+Unlike `cmd.exe`'s cd, no `/d` flag is needed to change folders across drives.
 
-# Build commands
-Build it as a normal C++ file. The requirement of additional runtime depends on the compiler you are using.
+# Building
+This project now uses the (meson)[meson.build] build system.
+
+To start off, install `meson`:
+```py
+pip install meson
 ```
-g++ .\ChangeDir.cpp -o ChangeDir.exe -O2 -static
-strip -s ChangeDir.exe
+More details [here](https://mesonbuild.com/Quick-guide.html).
+
+Next, clone the repository and build the project.
+```bash
+git clone https://github.com/spider2048/NewChangeDirectory
+meson setup build --buildtype release # or debugoptimized
+ninja -C build
 ```
+The output file `ChangeDir.exe` will be in the `build` folder.
